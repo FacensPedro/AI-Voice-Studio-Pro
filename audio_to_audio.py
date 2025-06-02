@@ -19,7 +19,7 @@ Exemplo de uso:
 
 import argparse
 import os
-import whisper
+import whisper # openai-whisper é importado como 'whisper'
 from TTS.api import TTS
 
 def transcribe_with_whisper(model_size, audio_path):
@@ -27,13 +27,27 @@ def transcribe_with_whisper(model_size, audio_path):
     Usa o Whisper para transcrever o áudio de entrada em texto.
     Retorna: (texto_transcrito, idioma_detectado)
     """
-    print(f">> Carregando modelo Whisper '{model_size}'...")
-    model = whisper.load_model(model_size)
-    print(">> Transcrevendo áudio...")
-    result = model.transcribe(audio_path)
-    texto = result["text"].strip()
-    lang = result["language"]
-    print(f">> Transcrição: {texto} (idioma: {lang})")
+    print(f"[LOG] transcribe_with_whisper: Iniciando. Model size: '{model_size}', Audio path: '{audio_path}'")
+    
+    print(f"[LOG] transcribe_with_whisper: Tentando carregar modelo Whisper '{model_size}'...")
+    try:
+        model = whisper.load_model(model_size)
+        print(f"[LOG] transcribe_with_whisper: Modelo Whisper '{model_size}' carregado com sucesso.")
+    except Exception as e:
+        print(f"[LOG] transcribe_with_whisper: ERRO ao carregar modelo Whisper '{model_size}'. Detalhe: {e}")
+        raise
+
+    print(f"[LOG] transcribe_with_whisper: Transcrevendo áudio de '{audio_path}'...")
+    try:
+        result = model.transcribe(audio_path)
+        texto = result["text"].strip()
+        lang = result["language"]
+        print(f"[LOG] transcribe_with_whisper: Transcrição: '{texto[:50]}...' (idioma: {lang})")
+    except Exception as e:
+        print(f"[LOG] transcribe_with_whisper: ERRO durante a transcrição com Whisper. Detalhe: {e}")
+        raise
+    
+    print(f"[LOG] transcribe_with_whisper: Finalizado.")
     return texto, lang
 
 def audio_to_audio(input_audio, tts_model, speaker_idx, output_path, speed, whisper_model_size):
@@ -41,22 +55,45 @@ def audio_to_audio(input_audio, tts_model, speaker_idx, output_path, speed, whis
     1) Transcreve input_audio usando Whisper.
     2) Gera novo áudio TTS com o texto transcrito, usando modelo TTS (voz clonada).
     """
+    print(f"[LOG] audio_to_audio: Iniciando. Input: '{input_audio}', TTS Model: '{tts_model}', Whisper Model: '{whisper_model_size}'")
+
     # 1) Transcrição
-    texto, idioma = transcribe_with_whisper(whisper_model_size, input_audio)
+    print(f"[LOG] audio_to_audio: Chamando transcribe_with_whisper...")
+    texto_transcrito, _ = transcribe_with_whisper(whisper_model_size, input_audio)
+    print(f"[LOG] audio_to_audio: transcribe_with_whisper concluído.")
 
     # 2) Síntese TTS do texto transcrito
-    print(f">> Carregando modelo TTS '{tts_model}' (locutor idx={speaker_idx})...")
-    tts = TTS(tts_model)
-    print(">> Sintetizando texto transcrito em áudio...")
-    wav = tts.tts(texto, speaker=speaker_idx, speed=speed)
-    print(f">> Salvando áudio convertido em '{output_path}'...")
-    tts.save_wav(wav, output_path)
-    print(">> Conclusão: áudio convertido gerado com sucesso.")
+    print(f"[LOG] audio_to_audio: Tentando carregar modelo TTS '{tts_model}' (locutor idx={speaker_idx})...")
+    try:
+        tts_instance = TTS(tts_model)
+        print(f"[LOG] audio_to_audio: Modelo TTS '{tts_model}' carregado com sucesso.")
+    except Exception as e:
+        print(f"[LOG] audio_to_audio: ERRO ao carregar modelo TTS '{tts_model}'. Detalhe: {e}")
+        raise
+        
+    print(f"[LOG] audio_to_audio: Sintetizando texto transcrito em áudio: '{texto_transcrito[:50]}...'")
+    try:
+        wav = tts_instance.tts(texto_transcrito, speaker=speaker_idx, speed=speed)
+        print(f"[LOG] audio_to_audio: Texto sintetizado com sucesso.")
+    except Exception as e:
+        print(f"[LOG] audio_to_audio: ERRO durante a síntese TTS. Detalhe: {e}")
+        raise
+
+    print(f"[LOG] audio_to_audio: Salvando áudio convertido em '{output_path}'...")
+    try:
+        tts_instance.save_wav(wav, output_path)
+        print(f"[LOG] audio_to_audio: Áudio convertido salvo com sucesso em '{output_path}'.")
+    except Exception as e:
+        print(f"[LOG] audio_to_audio: ERRO ao salvar o arquivo WAV convertido. Detalhe: {e}")
+        raise
+    
+    print(f"[LOG] audio_to_audio: Finalizado com sucesso.")
 
 
 if __name__ == "__main__":
+    print("[LOG] audio_to_audio.py: Executando como script principal.")
     parser = argparse.ArgumentParser(
-        description="Converte Áudio→Áudio usando Whisper para transcrição e Coqui TTS para síntese."
+        description="Converte Áudio->Áudio usando Whisper para transcrição e Coqui TTS para síntese."
     )
     parser.add_argument(
         "--input_audio",
@@ -91,14 +128,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--whisper_model_size",
         type=str,
-        default="base",
+        default="tiny", # Mantendo "tiny" como padrão aqui também para consistência
         help="Tamanho do modelo Whisper (tiny, base, small, medium, large)."
     )
 
     args = parser.parse_args()
+    print(f"[LOG] audio_to_audio.py: Argumentos recebidos: {args}")
+    
     if not os.path.isfile(args.input_audio):
-        print(f"[ERRO] '{args.input_audio}' não existe.")
-        exit(1)
+        print(f"[LOG] audio_to_audio.py: ERRO - Arquivo de entrada '{args.input_audio}' não existe.")
+        exit(1) # Usar sys.exit(1) seria mais canônico aqui
 
     audio_to_audio(
         input_audio=args.input_audio,
@@ -108,3 +147,4 @@ if __name__ == "__main__":
         speed=args.speed,
         whisper_model_size=args.whisper_model_size
     )
+    print("[LOG] audio_to_audio.py: Script concluído.")
