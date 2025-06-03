@@ -6,3 +6,4 @@ pydub
 soundfile
 torch
 TTS
+openai-whisper
